@@ -43,8 +43,11 @@ async def urban_dict(message: Message):
         await message.err(text=f"No result found for **{query}**")
         return
 
-    output = f"**Query:** `{query}`\n\n\
-**Meaning:** __{mean[0]['def']}__\n\n\
-**Example:**\n__{mean[0]['example']}__"
+    meaning = '\n'.join([i['def'] for i in mean])
+    example = '\n'.join([i['example'] for i in mean])
 
-    await message.edit_or_send_as_file(text=output, caption=query)
+    output = f"**Query:** `{query}`\n\n\
+**Meaning:**\n__{meaning}__\n\n\
+**Example:**\n__{example}__"
+
+    await message.edit_or_send_as_file(text=output, caption=query, log=True)

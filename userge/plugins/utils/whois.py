@@ -32,7 +32,7 @@ async def who_is(message: Message):
 
         except:
             await message.err(
-                text="no valid user_id or message specified, do .help whois for more info")
+                text="`no valid user_id or message specified, do .help whois for more info`")
             return
 
     elif message.reply_to_message:
@@ -41,7 +41,7 @@ async def who_is(message: Message):
 
     else:
         await message.err(
-            text="no valid user_id or message specified, do .help whois for more info")
+            text="`no valid user_id or message specified, do .help whois for more info`")
         return
 
     if from_user or from_chat is not None:
@@ -75,4 +75,4 @@ async def who_is(message: Message):
 
         else:
             message_out_str = "<b>📷 NO DP Found 📷</b>\n\n" + message_out_str
-            await message.edit(message_out_str)
+            await message.edit(message_out_str, log=True)

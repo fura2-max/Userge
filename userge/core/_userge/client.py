@@ -8,6 +8,9 @@
 
 
 import re
+import os
+import sys
+import psutil
 import asyncio
 import importlib
 from types import ModuleType
@@ -56,7 +59,7 @@ class Userge(BaseClient):
         This will return new logger object.
         """
 
-        LOG.info(
+        LOG.debug(
             LOG_STR.format(f"Creating Logger => {name}"))
 
         return logging.getLogger(name)
@@ -65,6 +68,9 @@ class Userge(BaseClient):
         """
         This will return new channel logger object.
         """
+
+        LOG.debug(
+            LOG_STR.format(f"Creating CLogger => {name}"))
 
         return CLogger(self, name)
 
@@ -77,7 +83,7 @@ class Userge(BaseClient):
         async def thread(*args: Any) -> Any:
             loop = asyncio.get_event_loop()
 
-            LOG.info(
+            LOG.debug(
                 LOG_STR.format("Creating new thread"))
 
             with ThreadPoolExecutor() as pool:
@@ -234,11 +240,21 @@ class Userge(BaseClient):
 
         filters_ = Filters.regex(pattern=pattern) & Filters.me if only_me \
             else Filters.regex(pattern=pattern)
-
         return self.__build_decorator(log=f"On {pattern}",
                                       filters=filters_,
                                       group=group,
                                       **kwargs)
+
+    def on_filters(self,
+                   filters: Filters,
+                   group: int = 0) -> Callable[[PYROFUNC], PYROFUNC]:
+        """
+        Decorator for handling filters.
+        """
+
+        return self.__build_decorator(log=f"On Filters {filters}",
+                                      filters=filters,
+                                      group=group)
 
     def on_new_member(self,
                       welcome_chats: Filters.chat,
@@ -299,7 +315,7 @@ class Userge(BaseClient):
                    chelp: str = '',
                    **_: Union[str, bool]) -> None:
         if cname:
-            LOG.info(
+            LOG.debug(
                 LOG_STR.format(f"Updating Help Dict => [ {cname} : {chelp} ]"))
 
             mname = module.split('.')[-1]
@@ -322,7 +338,7 @@ class Userge(BaseClient):
 
                 await func(Message(self, message, **kwargs))
 
-            LOG.info(
+            LOG.debug(
                 LOG_STR.format(f"Loading => [ async def {func.__name__}(message) ] " + \
                     f"from {func.__module__} `{log}`"))
 
@@ -339,13 +355,13 @@ class Userge(BaseClient):
         Load plugin to Userge.
         """
 
-        LOG.info(
+        LOG.debug(
             LOG_STR.format(f"Importing {name}"))
 
         self.__imported.append(
             importlib.import_module(PLUGINS_PATH.format(name)))
 
-        LOG.info(
+        LOG.debug(
             LOG_STR.format(
                 f"Imported {self.__imported[-1].__name__} Plugin Successfully"))
 
@@ -407,11 +423,17 @@ class Userge(BaseClient):
             LOG_STR.format("Restarting Userge"))
 
         await self.stop()
-        await self.reload_plugins()
-        await self.start()
 
-        LOG.info(
-            LOG_STR.format("Restarted Userge"))
+        try:
+            p = psutil.Process(os.getpid())
+            for handler in p.open_files() + p.connections():
+                os.close(handler.fd)
+
+        except Exception as e:
+            LOG.error(
+                LOG_STR.format(e))
+
+        os.execl(sys.executable, sys.executable, '-m', 'userge')
 
     def begin(self) -> None:
         """

@@ -21,7 +21,7 @@ class CLogger(BaseCLogger):
 
     def __init__(self, client: BaseClient, name: str) -> None:
         self.__client = client
-        self.__string = "**logger** : `" + name + "`\n\n{}"
+        self.__string = "**logger** : #" + name.split('.')[-1].upper() + "\n\n{}"
 
     async def log(self, text: str) -> None:
         """
@@ -34,7 +34,7 @@ class CLogger(BaseCLogger):
             None
         """
 
-        LOG.info(
+        LOG.debug(
             LOG_STR.format(f"logging text : {text} to channel : {Config.LOG_CHANNEL_ID}"))
 
         if Config.LOG_CHANNEL_ID:
@@ -43,7 +43,7 @@ class CLogger(BaseCLogger):
 
     async def fwd_msg(self,
                       message: BaseMessage,
-                      as_copy: bool = False,
+                      as_copy: bool = True,
                       remove_caption: bool = False) -> None:
         """
         forward message to log channel.
@@ -54,7 +54,7 @@ class CLogger(BaseCLogger):
             as_copy (`bool`, *optional*):
                 Pass True to forward messages without the forward header (i.e.: send a copy of the message content so
                 that it appears as originally sent by you).
-                Defaults to False.
+                Defaults to True.
             remove_caption (`bool`, *optional*):
                 If set to True and *as_copy* is enabled as well, media captions are not preserved when copying the
                 message. Has no effect if *as_copy* is not enabled.
@@ -63,7 +63,7 @@ class CLogger(BaseCLogger):
             None
         """
 
-        LOG.info(
+        LOG.debug(
             LOG_STR.format(f"logging msg : {message} to channel : {Config.LOG_CHANNEL_ID}"))
 
         if Config.LOG_CHANNEL_ID:

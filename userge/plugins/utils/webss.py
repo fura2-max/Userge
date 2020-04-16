@@ -20,7 +20,7 @@ async def webss(message: Message):
     if Config.SCREENSHOT_API is None:
         await message.edit(
             "Damn!\nI forgot to get the api from (here)[https://screenshotlayer.com]",
-            del_in=0, log=True)
+            del_in=0)
         return
     await message.edit("`Processing`")
     suc, data = await getimg(message.input_str)
@@ -29,14 +29,14 @@ async def webss(message: Message):
         await userge.send_chat_action(message.chat.id, "upload_photo")
 
         msg = await userge.send_document(message.chat.id, data, caption=message.input_str)
-        await CHANNEL.fwd(msg)
+        await CHANNEL.fwd_msg(msg)
 
         await message.delete()
         await userge.send_chat_action(message.chat.id, "cancel")
         if os.path.isfile(data):
             os.remove(data)
     else:
-        await message.err(data, del_in=6, log=True)
+        await message.err(data, del_in=6)
 
 
 async def getimg(url):

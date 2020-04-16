@@ -46,13 +46,13 @@ async def down_load_media(message: Message):
         # await userge.send_chat_action(message.chat.id, "cancel")
 
         if message.process_is_canceled:
-            await message.edit("`Process Canceled!`", del_in=5, log=True)
+            await message.edit("`Process Canceled!`", del_in=5)
 
         else:
             end_t = datetime.now()
             ms = (end_t - start_t).seconds
             await message.edit(
-                f"Downloaded to `{the_real_download_location}` in {ms} seconds", log=True)
+                f"Downloaded to `{the_real_download_location}` in {ms} seconds")
 
     elif message.input_str:
         start_t = datetime.now()
@@ -107,10 +107,10 @@ async def down_load_media(message: Message):
             end_t = datetime.now()
             ms = (end_t - start_t).seconds
 
-            await message.edit(f"Downloaded to `{download_file_path}` in {ms} seconds", log=True)
+            await message.edit(f"Downloaded to `{download_file_path}` in {ms} seconds")
 
         else:
-            await message.edit(f"`Something went wrong!`", del_in=3, log=True)
+            await message.edit(f"`Something went wrong!`", del_in=3)
 
     else:
         await message.edit(

@@ -24,17 +24,17 @@ async def speedtst(message: Message):
         test = speedtest.Speedtest()
         test.get_best_server()
 
-        await message.edit("`Performing download test . . .`")
+        await message.try_to_edit("`Performing download test . . .`")
         test.download()
 
-        await message.edit("`Performing upload test . . .`")
+        await message.try_to_edit("`Performing upload test . . .`")
         test.upload()
 
         test.results.share()
         result = test.results.dict()
 
     except Exception as e:
-        await message.err(text=e, log=True)
+        await message.err(text=e)
         return
 
     path = wget.download(result['share'])

@@ -22,16 +22,21 @@ async def helpme(message: Message):
         out_str = f"`{is_mdl_or_key}`\n\n{out}"
 
     elif isinstance(out, list) and is_mdl_or_key:
-        out_str = """**--Which module you want ?--**
+        out_str = f"""**--Which module you want ?--**
 
 **Usage**:
 
     `.help [module_name]`
 
-**Available Modules:**\n\n"""
+**Hint**:
+
+    use `.s` for search commands.
+    ex: `.s wel`
+
+**({len(out)}) Modules Available:**\n\n"""
 
         for i in out:
-            out_str += f"    `{i}`\n"
+            out_str += f"`{i}`    "
 
     elif isinstance(out, list) and not is_mdl_or_key:
         out_str = f"""**--Which command you want ?--**
@@ -40,9 +45,14 @@ async def helpme(message: Message):
 
     `.help .[command_name]`
 
-**Available Commands Under `{cmd}` Module:**\n\n"""
+**Hint**:
+
+    use `.s` for search commands.
+    ex: `.s wel`
+
+**({len(out)}) Commands Available Under `{cmd}` Module:**\n\n"""
 
         for i in out:
-            out_str += f"    `{i}`\n"
+            out_str += f"`{i}`    "
 
     await message.edit(text=out_str, del_in=0)

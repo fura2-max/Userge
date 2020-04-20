@@ -13,6 +13,8 @@ import shutil
 import heroku3
 from git import Repo
 from dotenv import load_dotenv
+from pyrogram import Filters
+
 from .logger import logging
 
 LOG = logging.getLogger(__name__)
@@ -45,7 +47,7 @@ class Config:
 
     LANG = os.environ.get("PREFERRED_LANGUAGE", "en")
 
-    DOWN_PATH = "./downloads/"
+    DOWN_PATH = "downloads/"
 
     SCREENSHOT_API = os.environ.get("SCREENSHOT_API", None)
 
@@ -70,6 +72,10 @@ class Config:
     HEROKU_GIT_URL = None
 
     MSG_DELETE_TIMEOUT = 120
+
+    WELCOME_DELETE_TIMEOUT = 120
+
+    ALLOWED_CHATS = Filters.chat([])
 
 
 if not os.path.isdir(Config.DOWN_PATH):

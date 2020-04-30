@@ -10,7 +10,6 @@
 import re
 import os
 import sys
-import psutil
 import asyncio
 import importlib
 from types import ModuleType
@@ -18,25 +17,25 @@ from typing import (
     Dict, List, Tuple, Optional, Union, Any, Callable)
 from concurrent.futures import ThreadPoolExecutor
 
+import psutil
 import nest_asyncio
 from pyrogram import (
+    Client as RawClient, Message as RawMessage,
     Filters, MessageHandler, InlineKeyboardMarkup,
     ReplyKeyboardMarkup, ReplyKeyboardRemove, ForceReply)
 
-from userge.utils import Config, logging
+from userge import logging, Config
 from userge.plugins import get_all_plugins
-from .base import BaseClient
 from .message import Message
 from .logger import CLogger
 
 PYROFUNC = Callable[[Message], Any]
-PLUGINS_PATH = "userge.plugins.{}"
 
 LOG = logging.getLogger(__name__)
-LOG_STR = "<<<!  #####  ___{}___  #####  !>>>"
+LOG_STR = "<<<!  #####  ___%s___  #####  !>>>"
 
 
-class Userge(BaseClient):
+class Userge(RawClient):
     """
     Userge: userbot
     """
@@ -45,9 +44,9 @@ class Userge(BaseClient):
 
         self.__help_dict: Dict[str, Dict[str, str]] = {}
         self.__imported: List[ModuleType] = []
+        self.__channel = self.getCLogger(__name__)
 
-        LOG.info(
-            LOG_STR.format("Setting Userge Configs"))
+        LOG.info(LOG_STR, "Setting Userge Configs")
 
         super().__init__(Config.HU_STRING_SESSION,
                          api_id=Config.API_ID,
@@ -59,8 +58,7 @@ class Userge(BaseClient):
         This will return new logger object.
         """
 
-        LOG.debug(
-            LOG_STR.format(f"Creating Logger => {name}"))
+        LOG.debug(LOG_STR, f"Creating Logger => {name}")
 
         return logging.getLogger(name)
 
@@ -69,8 +67,7 @@ class Userge(BaseClient):
         This will return new channel logger object.
         """
 
-        LOG.debug(
-            LOG_STR.format(f"Creating CLogger => {name}"))
+        LOG.debug(LOG_STR, f"Creating CLogger => {name}")
 
         return CLogger(self, name)
 
@@ -83,8 +80,7 @@ class Userge(BaseClient):
         async def thread(*args: Any) -> Any:
             loop = asyncio.get_event_loop()
 
-            LOG.debug(
-                LOG_STR.format("Creating new thread"))
+            LOG.debug(LOG_STR, "Creating new thread")
 
             with ThreadPoolExecutor() as pool:
                 return await loop.run_in_executor(pool, func, *args)
@@ -114,7 +110,8 @@ class Userge(BaseClient):
 
         mention = f"[{username or full_name}](tg://user?id={user_id})"
 
-        return {'fname': fname,
+        return {'id': user_obj.id,
+                'fname': fname,
                 'lname': lname,
                 'flname': full_name,
                 'uname': username,
@@ -124,7 +121,7 @@ class Userge(BaseClient):
                            chat_id: Union[int, str],
                            text: str,
                            del_in: int = -1,
-                           log: bool = False,
+                           log: Union[bool, str] = False,
                            parse_mode: Union[str, object] = object,
                            disable_web_page_preview: Optional[bool] = None,
                            disable_notification: Optional[bool] = None,
@@ -149,8 +146,9 @@ class Userge(BaseClient):
                 Text of the message to be sent.
             del_in (``int``):
                 Time in Seconds for delete that message.
-            log (``bool``, *optional*):
+            log (``bool`` | ``str``, *optional*):
                 If ``True``, the message will be forwarded to the log channel.
+                If ``str``, the logger name will be updated.
             parse_mode (``str``, *optional*):
                 By default, texts are parsed using both Markdown and HTML styles.
                 You can combine both syntaxes together.
@@ -183,7 +181,10 @@ class Userge(BaseClient):
                                          reply_markup=reply_markup)
 
         if log:
-            await self.getCLogger(__name__).fwd_msg(msg)
+            if isinstance(log, str):
+                self.__channel.update(log)
+
+            await self.__channel.fwd_msg(msg)
 
         del_in = del_in or Config.MSG_DELETE_TIMEOUT
 
@@ -195,14 +196,17 @@ class Userge(BaseClient):
 
     def on_cmd(self,
                command: str,
-               about: str,
+               about: Union[str, Dict[str, Union[str, List[str], Dict[str, str]]]],
                group: int = 0,
                name: str = '',
                trigger: str = '.',
-               only_me: bool = True,
-               **kwargs: Union[str, bool]) -> Callable[[PYROFUNC], PYROFUNC]:
+               filter_me: bool = True,
+               **kwargs: Union[
+                   str, bool, Dict[
+                       str, Union[
+                           str, List[str], Dict[str, str]]]]) -> Callable[[PYROFUNC], PYROFUNC]:
         """
-        Decorator for handling messages.
+        \nDecorator for handling messages.
 
         Example:
                 @userge.on_cmd('test', about='for testing')
@@ -210,15 +214,26 @@ class Userge(BaseClient):
         Parameters:
             command (``str``):
                 command name to execute (without trigger!).
-            about (``str``):
-                help string for command.
+            about (``str`` | ``dict``):
+                help string or dict for command.
+                {
+                    'header': ``str``,
+                    'description': ``str``,
+                    'flags': ``str`` | ``dict``,
+                    'options': ``str`` | ``dict``,
+                    'types': ``str`` | ``list``,
+                    'usage': ``str``,
+                    'examples': ``str`` | ``list``,
+                    'others': ``str``,
+                    'any_title': ``str`` | ``list`` | ``dict``
+                }
             group (``int``, *optional*):
                 The group identifier, defaults to 0.
             name (``str``, *optional*):
                 name for command.
             trigger (``str``, *optional*):
                 trigger to start command, defaults to '.'.
-            only_me (``bool``, *optional*):
+            filter_me (``bool``, *optional*):
                 If ``True``, Filters.me = True,  defaults to True.
             kwargs:
                 prefix (``str``, *optional*):
@@ -227,7 +242,8 @@ class Userge(BaseClient):
                     If ``True``, flags returns without prefix,  defaults to False.
         """
 
-        pattern = f"^\\{trigger}{command.lstrip('^')}" if trigger else f"^{command.lstrip('^')}"
+        pattern = f"^(?:\\{trigger}|\\{Config.SUDO_TRIGGER}){command.lstrip('^')}" if trigger \
+            else f"^{command.lstrip('^')}"
 
         if [i for i in '^()[]+*.\\|?:$' if i in command]:
             match = re.match("(\\w[\\w_]*)", command)
@@ -241,8 +257,22 @@ class Userge(BaseClient):
 
         kwargs.update({'cname': cname, 'chelp': about})
 
-        filters_ = Filters.regex(pattern=pattern) & Filters.me if only_me \
-            else Filters.regex(pattern=pattern)
+        filters_ = Filters.regex(pattern=pattern)
+
+        filter_my_trigger = Filters.create(lambda _, query: \
+            query.text.startswith(trigger) if trigger else True)
+
+        sudo_filter = Filters.create(lambda _, query: \
+            query.from_user.id in Config.SUDO_USERS and \
+                query.text.startswith(Config.SUDO_TRIGGER) if trigger else True)
+
+        sudo_cmd_filter = Filters.create(lambda _, __: \
+            cname.lstrip(trigger) in Config.ALLOWED_COMMANDS)
+
+        if filter_me:
+            filters_ = filters_ & (
+                (Filters.me & filter_my_trigger) | (sudo_filter & sudo_cmd_filter))
+
         return self.__build_decorator(log=f"On {pattern}",
                                       filters=filters_,
                                       group=group,
@@ -293,7 +323,7 @@ class Userge(BaseClient):
             return sorted(list(self.__help_dict)), True         # names of all modules
 
         if not key.startswith('.') and key in self.__help_dict and \
-            (len(self.__help_dict[key]) > 1 or list(self.__help_dict[key])[0] != key):
+            (len(self.__help_dict[key]) > 1 or list(self.__help_dict[key])[0].lstrip('.') != key):
             return sorted(list(self.__help_dict[key])), False   # all commands for that module
 
         dict_ = {x: y for _, i in self.__help_dict.items() for x, y in i.items()}
@@ -315,13 +345,92 @@ class Userge(BaseClient):
     def __add_help(self,
                    module: str,
                    cname: str = '',
-                   chelp: str = '',
+                   chelp: Union[str, Dict[str, Union[str, List[str], Dict[str, str]]]] = '',
                    **_: Union[str, bool]) -> None:
         if cname:
-            LOG.debug(
-                LOG_STR.format(f"Updating Help Dict => [ {cname} : {chelp} ]"))
+            LOG.debug(LOG_STR, f"Updating Help Dict => [ {cname} : {chelp} ]")
 
             mname = module.split('.')[-1]
+
+            if isinstance(chelp, dict):
+                tmp_chelp = ''
+
+                if 'header' in chelp and isinstance(chelp['header'], str):
+                    tmp_chelp += f"__**{chelp['header'].title()}**__"
+                    del chelp['header']
+
+                if 'description' in chelp and isinstance(chelp['description'], str):
+                    tmp_chelp += ("\n\n📝 --**Description**-- :\n\n    "
+                                  f"__{chelp['description'].capitalize()}__")
+                    del chelp['description']
+
+                if 'flags' in chelp:
+                    tmp_chelp += f"\n\n⛓ --**Available Flags**-- :\n"
+
+                    if isinstance(chelp['flags'], dict):
+                        for f_n, f_d in chelp['flags'].items():
+                            tmp_chelp += f"\n    ▫ `{f_n}` : __{f_d.lower()}__"
+                    else:
+                        tmp_chelp += f"\n    {chelp['flags']}"
+                    del chelp['flags']
+
+                if 'options' in chelp:
+                    tmp_chelp += f"\n\n🕶 --**Available Options**-- :\n"
+
+                    if isinstance(chelp['options'], dict):
+                        for o_n, o_d in chelp['options'].items():
+                            tmp_chelp += f"\n    ▫ `{o_n}` : __{o_d.lower()}__"
+                    else:
+                        tmp_chelp += f"\n    {chelp['options']}"
+                    del chelp['options']
+
+                if 'types' in chelp:
+                    tmp_chelp += f"\n\n🎨 --**Supported Types**-- :\n\n"
+
+                    if isinstance(chelp['types'], list):
+                        for _opt in chelp['types']:
+                            tmp_chelp += f"    `{_opt}` ,"
+                    else:
+                        tmp_chelp += f"    {chelp['types']}"
+                    del chelp['types']
+
+                if 'usage' in chelp:
+                    tmp_chelp += f"\n\n✒ --**Usage**-- :\n\n`{chelp['usage']}`"
+                    del chelp['usage']
+
+                if 'examples' in chelp:
+                    tmp_chelp += f"\n\n✏ --**Examples**-- :\n"
+
+                    if isinstance(chelp['examples'], list):
+                        for ex_ in chelp['examples']:
+                            tmp_chelp += f"\n    `{ex_}`\n"
+                    else:
+                        tmp_chelp += f"\n    `{chelp['examples']}`"
+                    del chelp['examples']
+
+                if 'others' in chelp:
+                    tmp_chelp += f"\n\n📎 --**Others**-- :\n\n{chelp['others']}"
+                    del chelp['others']
+
+                if chelp:
+                    for t_n, t_d in chelp.items():
+                        tmp_chelp += f"\n\n⚙ --**{t_n.title()}**-- :\n"
+
+                        if isinstance(t_d, dict):
+                            for o_n, o_d in t_d.items():
+                                tmp_chelp += f"\n    ▫ `{o_n}` : __{o_d.lower()}__"
+
+                        elif isinstance(t_d, list):
+                            tmp_chelp += '\n'
+                            for _opt in t_d:
+                                tmp_chelp += f"    `{_opt}` ,"
+
+                        else:
+                            tmp_chelp += '\n'
+                            tmp_chelp += t_d
+
+                chelp = tmp_chelp
+                del tmp_chelp
 
             if mname in self.__help_dict:
                 self.__help_dict[mname].update({cname: chelp})
@@ -333,17 +442,20 @@ class Userge(BaseClient):
                           log: str,
                           filters: Filters,
                           group: int,
-                          **kwargs: Union[str, bool]) -> Callable[[PYROFUNC], PYROFUNC]:
+                          **kwargs: Union[
+                              str, bool, Dict[
+                                  str, Union[
+                                      str, List[str], Dict[
+                                          str, str]]]]) -> Callable[[PYROFUNC], PYROFUNC]:
 
         def __decorator(func: PYROFUNC) -> PYROFUNC:
 
-            async def __template(_: BaseClient, message: Message) -> None:
+            async def __template(_: RawClient, __: RawMessage) -> None:
 
-                await func(Message(self, message, **kwargs))
+                await func(Message(_, __, **kwargs))
 
-            LOG.debug(
-                LOG_STR.format(f"Loading => [ async def {func.__name__}(message) ] " + \
-                    f"from {func.__module__} `{log}`"))
+            LOG.debug(LOG_STR, f"Loading => [ async def {func.__name__}(message) ] " + \
+                f"from {func.__module__} `{log}`")
 
             self.__add_help(func.__module__, **kwargs)
 
@@ -358,15 +470,12 @@ class Userge(BaseClient):
         Load plugin to Userge.
         """
 
-        LOG.debug(
-            LOG_STR.format(f"Importing {name}"))
+        LOG.debug(LOG_STR, f"Importing {name}")
 
         self.__imported.append(
-            importlib.import_module(PLUGINS_PATH.format(name)))
+            importlib.import_module(f"userge.plugins.{name}"))
 
-        LOG.debug(
-            LOG_STR.format(
-                f"Imported {self.__imported[-1].__name__} Plugin Successfully"))
+        LOG.debug(LOG_STR, f"Imported {self.__imported[-1].__name__} Plugin Successfully")
 
     def load_plugins(self) -> None:
         """
@@ -375,20 +484,17 @@ class Userge(BaseClient):
 
         self.__imported.clear()
 
-        LOG.info(
-            LOG_STR.format("Importing All Plugins"))
+        LOG.info(LOG_STR, "Importing All Plugins")
 
         for name in get_all_plugins():
             try:
                 self.load_plugin(name)
 
             except ImportError as i_e:
-                LOG.error(i_e)
+                LOG.error(LOG_STR, i_e)
 
-        LOG.info(
-            LOG_STR.format(
-                f"Imported ({len(self.__imported)}) Plugins => " + \
-                    str([i.__name__ for i in self.__imported])))
+        LOG.info(LOG_STR, f"Imported ({len(self.__imported)}) Plugins => " + \
+            str([i.__name__ for i in self.__imported]))
 
     async def reload_plugins(self) -> int:
         """
@@ -398,22 +504,19 @@ class Userge(BaseClient):
         self.__help_dict.clear()
         reloaded: List[str] = []
 
-        LOG.info(
-            LOG_STR.format("Reloading All Plugins"))
+        LOG.info(LOG_STR, "Reloading All Plugins")
 
         for imported in self.__imported:
             try:
                 reloaded_ = importlib.reload(imported)
 
             except ImportError as i_e:
-                LOG.error(i_e)
+                LOG.error(LOG_STR, i_e)
 
             else:
                 reloaded.append(reloaded_.__name__)
 
-        LOG.info(
-            LOG_STR.format(
-                f"Reloaded {len(reloaded)} Plugins => {reloaded}"))
+        LOG.info(LOG_STR, f"Reloaded {len(reloaded)} Plugins => {reloaded}")
 
         return len(reloaded)
 
@@ -422,8 +525,7 @@ class Userge(BaseClient):
         Restart the Userge.
         """
 
-        LOG.info(
-            LOG_STR.format("Restarting Userge"))
+        LOG.info(LOG_STR, "Restarting Userge")
 
         await self.stop()
 
@@ -433,21 +535,20 @@ class Userge(BaseClient):
                 os.close(handler.fd)
 
         except Exception as c_e:
-            LOG.error(
-                LOG_STR.format(c_e))
+            LOG.error(LOG_STR, c_e)
 
         os.execl(sys.executable, sys.executable, '-m', 'userge')
+
+        sys.exit()
 
     def begin(self) -> None:
         """
         This will start the Userge.
         """
 
-        LOG.info(
-            LOG_STR.format("Starting Userge"))
+        LOG.info(LOG_STR, "Starting Userge")
 
         nest_asyncio.apply()
         self.run()
 
-        LOG.info(
-            LOG_STR.format("Exiting Userge"))
+        LOG.info(LOG_STR, "Exiting Userge")

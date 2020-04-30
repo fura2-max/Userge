@@ -35,18 +35,14 @@ del __tmp__
 for _user in AFK_COLLECTION.find():
     USERS.update({_user['_id']:  [_user['pcount'], _user['gcount'], _user['men']]})
 
-IS_AFK_FILTER = Filters.create(lambda _, query: bool(IS_AFK))
+IS_AFK_FILTER = Filters.create(lambda _, __: bool(IS_AFK))
 
 
-@userge.on_cmd("afk", about="""\
-__Set to AFK mode__
-
-    Sets your status as AFK. Responds to anyone who tags/PM's
-    you telling you are AFK. Switches off AFK when you type back anything.
-
-**Usage:**
-
-    `.afk` or `.afk [reason]`""")
+@userge.on_cmd("afk", about={
+    'header': "Set to AFK mode",
+    'description': "Sets your status as AFK. Responds to anyone who tags/PM's.\n"
+                   "you telling you are AFK. Switches off AFK when you type back anything.",
+    'usage': ".afk or .afk [reason]"})
 async def active_afk(message: Message):
     global REASON, IS_AFK, TIME
 
@@ -55,7 +51,7 @@ async def active_afk(message: Message):
     REASON = message.input_str
 
     await CHANNEL.log(f"You went AFK! : `{REASON}`")
-    await message.edit("You went AFK!", del_in=1)
+    await message.edit("`You went AFK!`", del_in=1)
 
     AFK_COLLECTION.drop()
     SAVED_SETTINGS.update_one(
@@ -68,11 +64,12 @@ async def handle_afk_incomming(message: Message):
     user_id = message.from_user.id
     chat = message.chat
     user_dict = await userge.get_user_dict(user_id)
+    afk_time = time_formatter(round(time.time() - TIME))
 
     if user_id in USERS:
-        if not (USERS[user_id][0] + USERS[user_id][1]) % randint(2, 5):
+        if not (USERS[user_id][0] + USERS[user_id][1]) % randint(2, 4):
             if REASON:
-                out_str = f"I'm still **AFK**.\nReason: `{REASON}`"
+                out_str = f"I'm still **AFK**.\nReason: `{REASON}`\nLast Seen: `{afk_time} ago`"
             else:
                 out_str = choice(AFK_REASONS)
 
@@ -86,7 +83,7 @@ async def handle_afk_incomming(message: Message):
 
     else:
         if REASON:
-            out_str = f"I'm **AFK** right now.\nReason: `{REASON}`"
+            out_str = f"I'm **AFK** right now.\nReason: `{REASON}`\nLast Seen: `{afk_time} ago`"
         else:
             out_str = choice(AFK_REASONS)
 
@@ -124,8 +121,7 @@ async def handle_afk_outgoing(message: Message):
     IS_AFK = False
     afk_time = time_formatter(round(time.time() - TIME))
 
-    await CHANNEL.log("I'm no longer AFK!")
-    replied: Message = await message.reply(f"I'm no longer AFK!")
+    replied: Message = await message.reply(f"`I'm no longer AFK!`", log=__name__)
 
     if USERS:
         p_msg = ''
@@ -169,7 +165,8 @@ async def handle_afk_outgoing(message: Message):
 
 AFK_REASONS = (
     "I'm busy right now. Please talk in a bag and when I come back you can just give me the bag!",
-    "I'm away right now. If you need anything, leave a message after the beep:\n`beeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeep`!",
+    "I'm away right now. If you need anything, leave a message after the beep: \
+`beeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeep!`",
     "You missed me, next time aim better.",
     "I'll be back in a few minutes and if I'm not...,\nwait longer.",
     "I'm not here right now, so I'm probably somewhere else.",
@@ -177,17 +174,21 @@ AFK_REASONS = (
     "Sometimes the best things in life are worth waiting for…\nI'll be right back.",
     "I'll be right back,\nbut if I'm not right back,\nI'll be back later.",
     "If you haven't figured it out already,\nI'm not here.",
-    "Hello, welcome to my away message, how may I ignore you today?",
-    "I'm away over 7 seas and 7 countries,\n7 waters and 7 continents,\n7 mountains and 7 hills,\n7 plains and 7 mounds,\n7 pools and 7 lakes,\n7 springs and 7 meadows,\n7 cities and 7 neighborhoods,\n7 blocks and 7 houses...\n\nWhere not even your messages can reach me!",
-    "I'm away from the keyboard at the moment, but if you'll scream loud enough at your screen, I might just hear you.",
-    "I went that way\n---->",
-    "I went this way\n<----",
+    "I'm away over 7 seas and 7 countries,\n7 waters and 7 continents,\n7 mountains and 7 hills,\
+7 plains and 7 mounds,\n7 pools and 7 lakes,\n7 springs and 7 meadows,\
+7 cities and 7 neighborhoods,\n7 blocks and 7 houses...\
+    Where not even your messages can reach me!",
+    "I'm away from the keyboard at the moment, but if you'll scream loud enough at your screen,\
+    I might just hear you.",
+    "I went that way\n>>>>>",
+    "I went this way\n<<<<<",
     "Please leave a message and make me feel even more important than I already am.",
-    "I am not here so stop writing to me,\nor else you will find yourself with a screen full of your own messages.",
     "If I were here,\nI'd tell you where I am.\n\nBut I'm not,\nso ask me when I return...",
     "I am away!\nI don't know when I'll be back!\nHopefully a few minutes from now!",
-    "I'm not available right now so please leave your name, number, and address and I will stalk you later.",
-    "Sorry, I'm not here right now.\nFeel free to talk to my userbot as long as you like.\nI'll get back to you later.",
+    "I'm not available right now so please leave your name, number, \
+    and address and I will stalk you later. :P",
+    "Sorry, I'm not here right now.\nFeel free to talk to my userbot as long as you like.\
+I'll get back to you later.",
     "I bet you were expecting an away message!",
     "Life is so short, there are so many things to do...\nI'm away doing one of them..",
     "I am not here right now...\nbut if I was...\n\nwouldn't that be awesome?")

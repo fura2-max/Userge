@@ -7,21 +7,39 @@
 # All rights reserved.
 
 
-from userge.utils import Config, logging
-from .base import BaseCLogger, BaseClient, BaseMessage
+from pyrogram import Message as RawMessage
+from userge import logging, Config
+from . import client, message
 
 LOG = logging.getLogger(__name__)
-LOG_STR = "<<<!  (((((  ___{}___  )))))  !>>>"
+LOG_STR = "<<<!  (((((  ___%s___  )))))  !>>>"
 
 
-class CLogger(BaseCLogger):
+class CLogger:
     """
     Channel logger for Userge.
     """
 
-    def __init__(self, client: BaseClient, name: str) -> None:
-        self.__client = client
-        self.__string = "**logger** : #" + name.split('.')[-1].upper() + "\n\n{}"
+    def __init__(self, client_: 'client.Userge', name: str) -> None:
+        self.__client = client_
+        self.__string = self.__gen_string(name)
+
+    @staticmethod
+    def __gen_string(name: str) -> str:
+        return "**logger** : #" + name.split('.')[-1].upper() + "\n\n{}"
+
+    def update(self, name: str) -> None:
+        """
+        update current logger name.
+
+        Parameters:
+            name (``str``):
+                New name to logger.
+        Returns:
+            None
+        """
+
+        self.__string = self.__gen_string(name)
 
     async def log(self, text: str) -> None:
         """
@@ -34,15 +52,14 @@ class CLogger(BaseCLogger):
             None
         """
 
-        LOG.debug(
-            LOG_STR.format(f"logging text : {text} to channel : {Config.LOG_CHANNEL_ID}"))
+        LOG.debug(LOG_STR, f"logging text : {text} to channel : {Config.LOG_CHANNEL_ID}")
 
         if Config.LOG_CHANNEL_ID:
             await self.__client.send_message(chat_id=Config.LOG_CHANNEL_ID,
                                              text=self.__string.format(text))
 
     async def fwd_msg(self,
-                      message: BaseMessage,
+                      message_: 'message.Message',
                       as_copy: bool = True,
                       remove_caption: bool = False) -> None:
         """
@@ -64,11 +81,18 @@ class CLogger(BaseCLogger):
         """
 
         LOG.debug(
-            LOG_STR.format(f"logging msg : {message} to channel : {Config.LOG_CHANNEL_ID}"))
+            LOG_STR, f"forwarding msg : {message_} to channel : {Config.LOG_CHANNEL_ID}")
 
-        if Config.LOG_CHANNEL_ID:
-            await self.__client.forward_messages(chat_id=Config.LOG_CHANNEL_ID,
-                                                 from_chat_id=message.chat.id,
-                                                 message_ids=(message.message_id),
-                                                 as_copy=as_copy,
-                                                 remove_caption=remove_caption)
+        if Config.LOG_CHANNEL_ID and isinstance(message_, RawMessage):
+            if message_.media:
+                await self.log("**Forwarding Message...**")
+
+                await self.__client.forward_messages(chat_id=Config.LOG_CHANNEL_ID,
+                                                     from_chat_id=message_.chat.id,
+                                                     message_ids=(
+                                                         message_.message_id),
+                                                     as_copy=as_copy,
+                                                     remove_caption=remove_caption)
+
+            else:
+                await self.log(message_.text)

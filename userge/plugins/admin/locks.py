@@ -13,22 +13,15 @@ from userge import userge, Message
 
 CHANNEL = userge.getCLogger(__name__)
 
-@userge.on_cmd("lock", about="""\
-__use this to lock group permissions__
 
-**Usage:**
-
-`Allows you to lock some common permission types in the chat.`
-
-[NOTE: Requires proper admin rights in the chat!!!]
-
-**Available types to Lock Permissions:**
-
-`all, msg, media, polls, invite, pin, info, webprev, animations, games, stickers, inlinebots`
-
-**Example:**
-
-    `.lock [all | type]`""")
+@userge.on_cmd("lock", about={
+    'header': "use this to lock group permissions",
+    'description': "Allows you to lock some common permission types in the chat.\n"
+                   "[NOTE: Requires proper admin rights in the chat!!!]",
+    'types': [
+        'all', 'msg', 'media', 'polls', 'invite', 'pin', 'info',
+        'webprev', 'inlinebots', 'animations', 'games', 'stickers'],
+    'examples': ".lock [all | type]"})
 async def lock_perm(message: Message):
     """
     this function can lock chat permissions from tg group
@@ -50,7 +43,7 @@ async def lock_perm(message: Message):
     chat_id = message.chat.id
 
     if not lock_type:
-        await message.edit(text="**I Can't Lock Nothing! 🤦‍♂️**", del_in=0)
+        await message.edit(text=r"`I Can't Lock Nothing! (－‸ლ)`", del_in=0)
         return
 
     get_perm = await userge.get_chat(chat_id)
@@ -78,9 +71,10 @@ async def lock_perm(message: Message):
                 f"PERMISSIONS: `All Permissions`"
             )
 
-        except:
+        except Exception as e_f:
             await message.edit(
-                text=f"**Do I have proper Admin rights for that 🤔**", del_in=0)
+                text=r"`i don't have permission to do that ＞︿＜`\n\n"
+                f"**ERROR:** `{e_f}`", del_in=0)
 
         return
 
@@ -129,7 +123,7 @@ async def lock_perm(message: Message):
         perm = "pin"
 
     else:
-        await message.edit(text=r"**Invalid Lock Type! ¯\_(ツ)_/¯**", del_in=0)
+        await message.edit(text=r"`Invalid Lock Type! ¯\_(ツ)_/¯`", del_in=0)
         return
 
     try:
@@ -153,27 +147,20 @@ async def lock_perm(message: Message):
             f"PERMISSIONS: `{perm} Permission`"
         )
 
-    except:
+    except Exception as e_f:
         await message.edit(
-            text="**Do I have proper Admin rights for that 🤔**", del_in=0)
+            text=r"`i don't have permission to do that ＞︿＜`\n\n"
+            f"**ERROR:** `{e_f}`", del_in=0)
 
 
-@userge.on_cmd("unlock", about="""\
-__use this to unlock group permissions__
-
-**Usage:**
-
-`Allows you to unlock some common permission types in the chat.`
-
-[NOTE: Requires proper admin rights in the chat!!!]
-
-**Available types to Unlock Permissions:**
-
-`all, msg, media, polls, invite, pin, info, web preview, other [animations, games, stickers, inline bots]`
-
-**Example:**
-
-    `.unlock [all | type]`""")
+@userge.on_cmd("unlock", about={
+    'header': "use this to unlock group permissions",
+    'description': "Allows you to unlock some common permission types in the chat.\n"
+                   "[NOTE: Requires proper admin rights in the chat!!!]",
+    'types': [
+        'all', 'msg', 'media', 'polls', 'invite', 'pin', 'info',
+        'webprev', 'inlinebots', 'animations', 'games', 'stickers'],
+    'examples': ".unlock [all | type]"})
 async def unlock_perm(message: Message):
     """
     this function can unlock chat permissions from tg group
@@ -195,7 +182,7 @@ async def unlock_perm(message: Message):
     chat_id = message.chat.id
 
     if not unlock_type:
-        await message.edit(text="**I Can't Unlock Nothing! 🤦‍♂️**", del_in=0)
+        await message.edit(text=r"`I Can't Unlock Nothing! (－‸ლ)`", del_in=0)
         return
 
     get_uperm = await userge.get_chat(chat_id)
@@ -235,10 +222,10 @@ async def unlock_perm(message: Message):
                 f"PERMISSIONS: `All Permissions`"
             )
 
-        except:
+        except Exception as e_f:
             await message.edit(
-                text=f"**Do I have proper Admin rights for that 🤔**", del_in=0)
-        return
+                text=r"`i don't have permission to do that ＞︿＜`\n\n"
+                f"**ERROR:** `{e_f}`", del_in=0)
 
     if unlock_type == "msg":
         umsg = True
@@ -285,7 +272,7 @@ async def unlock_perm(message: Message):
         uperm = "pin"
 
     else:
-        await message.edit(text=r"**Invalid Unlock Type! ¯\_(ツ)_/¯**", del_in=0)
+        await message.edit(text=r"`Invalid Unlock Type! ¯\_(ツ)_/¯`", del_in=0)
         return
 
     try:
@@ -309,16 +296,15 @@ async def unlock_perm(message: Message):
             f"PERMISSIONS: `{uperm} Permission`"
         )
 
-    except:
-        await message.edit(text=f"**Do I have proper Admin rights for that 🤔**", del_in=0)
+    except Exception as e_f:
+        await message.edit(
+            text=r"`i don't have permission to do that ＞︿＜`\n\n"
+            f"**ERROR:** `{e_f}`", del_in=0)
 
 
-@userge.on_cmd("vperm", about="""\
-__use this to view group permissions__
-
-**Usage:**
-
-`Allows you to view permission types on/off status in the chat.`""")
+@userge.on_cmd("vperm", about={
+    'header': "use this to view group permissions",
+    'description': "Allows you to view permission types on/off status in the chat."})
 async def view_perm(message: Message):
     """
     this function can check chat permissions from tg group
@@ -337,7 +323,7 @@ async def view_perm(message: Message):
     vinvite = ""
     vpin = ""
 
-    await message.edit("`Checking group permissions... Hang on!`")
+    await message.edit("`Checking group permissions... Hang on!! ⏳`")
 
     v_perm = await userge.get_chat(message.chat.id)
 
@@ -394,6 +380,7 @@ async def view_perm(message: Message):
                 await message.edit(permission_view_str)
                 await CHANNEL.log("`vperm` command executed")
 
-        except:
+        except Exception as e_f:
             await message.edit(
-                text=f"**Something went wrong! do** `.help vperm`", del_in=0)
+                text="`Something went wrong!` 🤔\n\n"
+                f"**ERROR:** `{e_f}`", del_in=0)

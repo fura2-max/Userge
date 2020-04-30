@@ -12,35 +12,35 @@ import os
 import asyncio
 from typing import List, Dict, Union, Optional, Sequence
 
-from pyrogram import InlineKeyboardMarkup
+from pyrogram import Client as RawClient, Message as RawMessage, InlineKeyboardMarkup
 from pyrogram.errors.exceptions import MessageAuthorRequired, MessageTooLong
-from pyrogram.errors.exceptions.bad_request_400 import MessageNotModified
+from pyrogram.errors.exceptions.bad_request_400 import MessageNotModified, MessageIdInvalid
 
-from userge.utils import logging, Config
-from .base import BaseClient, BaseMessage
+from userge import logging, Config
 
 CANCEL_LIST: List[int] = []
 ERROR_MSG_DELETE_TIMEOUT = 5
 ERROR_STRING = "**ERROR**: `{}`"
 
 LOG = logging.getLogger(__name__)
-LOG_STR = "<<<!  [[[[[  ___{}___  ]]]]]  !>>>"
+LOG_STR = "<<<!  [[[[[  ___%s___  ]]]]]  !>>>"
 
 
-class Message(BaseMessage):
+class Message(RawMessage):
     """
     Modded Message Class For Userge
     """
 
     def __init__(self,
-                 client: BaseClient,
-                 message: BaseMessage,
+                 client: RawClient,
+                 message: RawMessage,
                  **kwargs: Union[str, bool]) -> None:
 
         super().__init__(client=client,
                          **self.__msg_to_dict(message))
 
-        self.reply_to_message: BaseMessage
+        self.message_id: int
+        self.reply_to_message: Optional[RawMessage]
 
         if self.reply_to_message:
             self.reply_to_message = self.__class__(self._client, self.reply_to_message)
@@ -117,7 +117,8 @@ class Message(BaseMessage):
 
         CANCEL_LIST.append(self.message_id)
 
-    def __msg_to_dict(self, message: BaseMessage) -> Dict[str, object]:
+    @staticmethod
+    def __msg_to_dict(message: RawMessage) -> Dict[str, object]:
 
         kwargs_ = vars(message)
         del message
@@ -125,23 +126,12 @@ class Message(BaseMessage):
         if '_client' in kwargs_:
             del kwargs_['_client']
 
-        if '_Message__channel' in kwargs_:
-            del kwargs_['_Message__channel']
+        for key_ in ['channel', 'filtered', 'process_canceled',
+                     'filtered_input_str', 'flags', 'kwargs']:
+            tmp_ = '_Message__' + key_
 
-        if '_Message__filtered' in kwargs_:
-            del kwargs_['_Message__filtered']
-
-        if '_Message__process_canceled' in kwargs_:
-            del kwargs_['_Message__process_canceled']
-
-        if '_Message__filtered_input_str' in kwargs_:
-            del kwargs_['_Message__filtered_input_str']
-
-        if '_Message__flags' in kwargs_:
-            del kwargs_['_Message__flags']
-
-        if '_Message__kwargs' in kwargs_:
-            del kwargs_['_Message__kwargs']
+            if tmp_ in kwargs_:
+                del kwargs_[tmp_]
 
         return kwargs_
 
@@ -153,12 +143,12 @@ class Message(BaseMessage):
             input_str = self.input_str
 
             for i in input_str.strip().split():
-                match = re.match(f"({prefix}[a-z]+)($|[0-9]+)?$", i)
+                match = re.match(f"({prefix}[a-zA-Z]+)($|[0-9]+)?$", i)
 
                 if match:
                     items: Sequence[str] = match.groups()
-                    self.__flags[items[0].lstrip(prefix) if del_pre \
-                        else items[0]] = items[1] or ''
+                    self.__flags[items[0].lstrip(prefix).lower() if del_pre \
+                        else items[0].lower()] = items[1] or ''
 
                 else:
                     self.__filtered_input_str += ' ' + i
@@ -166,8 +156,8 @@ class Message(BaseMessage):
             self.__filtered_input_str = self.__filtered_input_str.strip()
 
             LOG.debug(
-                LOG_STR.format(
-                    f"Filtered Input String => [ {self.__filtered_input_str}, {self.__flags} ]"))
+                LOG_STR,
+                f"Filtered Input String => [ {self.__filtered_input_str}, {self.__flags} ]")
 
             self.__filtered = True
 
@@ -175,8 +165,8 @@ class Message(BaseMessage):
                            text: str,
                            filename: str = "output.txt",
                            caption: str = '',
-                           log: bool = False,
-                           delete_message: bool = True) -> BaseMessage:
+                           log: Union[bool, str] = False,
+                           delete_message: bool = True) -> 'Message':
         """
         You can send large outputs as file
 
@@ -190,8 +180,9 @@ class Message(BaseMessage):
                 file_name for output file.
             caption (``str``, *optional*):
                 caption for output file.
-            log (``bool``, *optional*):
+            log (``bool`` | ``str``, *optional*):
                 If ``True``, the message will be forwarded to the log channel.
+                If ``str``, the logger name will be updated.
             delete_message (``bool``, *optional*):
                 If ``True``, the message will be deleted after sending the file.
         Returns:
@@ -204,8 +195,7 @@ class Message(BaseMessage):
         reply_to_id = self.reply_to_message.message_id if self.reply_to_message \
             else self.message_id
 
-        LOG.debug(
-            LOG_STR.format(f"Uploading {filename} To Telegram"))
+        LOG.debug(LOG_STR, f"Uploading {filename} To Telegram")
 
         msg = await self._client.send_document(chat_id=self.chat.id,
                                                document=filename,
@@ -216,6 +206,9 @@ class Message(BaseMessage):
         os.remove(filename)
 
         if log:
+            if isinstance(log, str):
+                self.__channel.update(log)
+
             await self.__channel.fwd_msg(msg)
 
         if delete_message:
@@ -226,13 +219,13 @@ class Message(BaseMessage):
     async def reply(self,
                     text: str,
                     del_in: int = -1,
-                    log: bool = False,
+                    log: Union[bool, str] = False,
                     quote: Optional[bool] = None,
                     parse_mode: Union[str, object] = object,
                     disable_web_page_preview: Optional[bool] = None,
                     disable_notification: Optional[bool] = None,
                     reply_to_message_id: Optional[int] = None,
-                    reply_markup: InlineKeyboardMarkup = None) -> Union[BaseMessage, bool]:
+                    reply_markup: InlineKeyboardMarkup = None) -> Union['Message', bool]:
         """
         Example:
                 message.reply("hello")
@@ -242,8 +235,9 @@ class Message(BaseMessage):
                 Text of the message to be sent.
             del_in (``int``):
                 Time in Seconds for delete that message.
-            log (``bool``, *optional*):
+            log (``bool`` | ``str``, *optional*):
                 If ``True``, the message will be forwarded to the log channel.
+                If ``str``, the logger name will be updated.
             quote (``bool``, *optional*):
                 If ``True``, the message will be sent as a reply to this message.
                 If *reply_to_message_id* is passed, this parameter will be ignored.
@@ -285,13 +279,16 @@ class Message(BaseMessage):
                                               reply_markup=reply_markup)
 
         if log:
+            if isinstance(log, str):
+                self.__channel.update(log)
+
             await self.__channel.fwd_msg(msg)
 
         del_in = del_in or Config.MSG_DELETE_TIMEOUT
 
         if del_in > 0:
             await asyncio.sleep(del_in)
-            return await msg.delete()
+            return bool(await msg.delete())
 
         return Message(self._client, msg)
 
@@ -300,10 +297,11 @@ class Message(BaseMessage):
     async def edit(self,
                    text: str,
                    del_in: int = -1,
-                   log: bool = False,
+                   log: Union[bool, str] = False,
+                   sudo: bool = True,
                    parse_mode: Union[str, object] = object,
                    disable_web_page_preview: Optional[bool] = None,
-                   reply_markup: InlineKeyboardMarkup = None) -> Union[BaseMessage, bool]:
+                   reply_markup: InlineKeyboardMarkup = None) -> Union['Message', bool]:
         """
         Example:
                 message.edit_text("hello")
@@ -313,8 +311,11 @@ class Message(BaseMessage):
                 New text of the message.
             del_in (``int``):
                 Time in Seconds for delete that message.
-            log (``bool``, *optional*):
+            log (``bool`` | ``str``, *optional*):
                 If ``True``, the message will be forwarded to the log channel.
+                If ``str``, the logger name will be updated.
+            sudo (``bool``, *optional*):
+                If ``True``, sudo users supported.
             parse_mode (``str``, *optional*):
                 By default, texts are parsed using both Markdown and HTML styles.
                 You can combine both syntaxes together.
@@ -331,37 +332,58 @@ class Message(BaseMessage):
             RPCError: In case of a Telegram RPC error.
         """
 
-        msg = await self._client.edit_message_text(chat_id=self.chat.id,
-                                                   message_id=self.message_id,
-                                                   text=text,
-                                                   parse_mode=parse_mode,
-                                                   disable_web_page_preview=disable_web_page_preview,
-                                                   reply_markup=reply_markup)
+        try:
+            msg_ = await self._client.edit_message_text(chat_id=self.chat.id,
+                                                        message_id=self.message_id,
+                                                        text=text,
+                                                        parse_mode=parse_mode,
+                                                        disable_web_page_preview=disable_web_page_preview,
+                                                        reply_markup=reply_markup)
 
-        if log:
-            await self.__channel.fwd_msg(msg)
+        except (MessageAuthorRequired, MessageIdInvalid) as m_er:
+            if sudo:
+                msg = await self.reply(text=text,
+                                       del_in=del_in,
+                                       log=log,
+                                       parse_mode=parse_mode,
+                                       disable_web_page_preview=disable_web_page_preview,
+                                       reply_markup=reply_markup)
 
-        del_in = del_in or Config.MSG_DELETE_TIMEOUT
+                if isinstance(msg, Message):
+                    self.message_id = msg.message_id
 
-        if del_in > 0:
-            await asyncio.sleep(del_in)
-            return await msg.delete()
+                return msg
 
-        return Message(self._client, msg)
+            raise m_er
+
+        else:
+            if log:
+                if isinstance(log, str):
+                    self.__channel.update(log)
+
+                await self.__channel.fwd_msg(msg_)
+
+            del_in = del_in or Config.MSG_DELETE_TIMEOUT
+
+            if del_in > 0:
+                await asyncio.sleep(del_in)
+                return bool(await msg_.delete())
+
+            return Message(self._client, msg_)
 
     edit_text = edit
 
     async def force_edit(self,
                          text: str,
                          del_in: int = -1,
-                         log: bool = False,
+                         log: Union[bool, str] = False,
                          parse_mode: Union[str, object] = object,
                          disable_web_page_preview: Optional[bool] = None,
                          reply_markup: InlineKeyboardMarkup = None,
-                         **kwargs) -> Union[BaseMessage, bool]:
+                         **kwargs) -> Union['Message', bool]:
         """
-        This will first try to message.edit. If it raise MessageAuthorRequired error,
-        run message.reply.
+        This will first try to message.edit.
+        If it raise MessageAuthorRequired or MessageIdInvalid error, run message.reply.
 
         Example:
                 message.force_edit(text='force_edit', del_in=3)
@@ -371,8 +393,9 @@ class Message(BaseMessage):
                 New text of the message.
             del_in (``int``):
                 Time in Seconds for delete that message.
-            log (``bool``, *optional*):
+            log (``bool`` | ``str``, *optional*):
                 If ``True``, the message will be forwarded to the log channel.
+                If ``str``, the logger name will be updated.
             parse_mode (``str``, *optional*):
                 By default, texts are parsed using both Markdown and HTML styles.
                 You can combine both syntaxes together.
@@ -392,11 +415,12 @@ class Message(BaseMessage):
             return await self.edit(text=text,
                                    del_in=del_in,
                                    log=log,
+                                   sudo=False,
                                    parse_mode=parse_mode,
                                    disable_web_page_preview=disable_web_page_preview,
                                    reply_markup=reply_markup)
 
-        except MessageAuthorRequired:
+        except (MessageAuthorRequired, MessageIdInvalid):
             return await self.reply(text=text,
                                     del_in=del_in,
                                     log=log,
@@ -408,10 +432,11 @@ class Message(BaseMessage):
     async def err(self,
                   text: str,
                   del_in: int = -1,
-                  log: bool = False,
+                  log: Union[bool, str] = False,
+                  sudo: bool = True,
                   parse_mode: Union[str, object] = object,
                   disable_web_page_preview: Optional[bool] = None,
-                  reply_markup: InlineKeyboardMarkup = None) -> Union[BaseMessage, bool]:
+                  reply_markup: InlineKeyboardMarkup = None) -> Union['Message', bool]:
         """
         You can send error messages using this method
 
@@ -423,8 +448,11 @@ class Message(BaseMessage):
                 New text of the message.
             del_in (``int``):
                 Time in Seconds for delete that message.
-            log (``bool``, *optional*):
+            log (``bool`` | ``str``, *optional*):
                 If ``True``, the message will be forwarded to the log channel.
+                If ``str``, the logger name will be updated.
+            sudo (``bool``, *optional*):
+                If ``True``, sudo users supported.
             parse_mode (``str``, *optional*):
                 By default, texts are parsed using both Markdown and HTML styles.
                 You can combine both syntaxes together.
@@ -445,6 +473,7 @@ class Message(BaseMessage):
         return await self.edit(text=ERROR_STRING.format(text),
                                del_in=del_in,
                                log=log,
+                               sudo=sudo,
                                parse_mode=parse_mode,
                                disable_web_page_preview=disable_web_page_preview,
                                reply_markup=reply_markup)
@@ -452,14 +481,14 @@ class Message(BaseMessage):
     async def force_err(self,
                         text: str,
                         del_in: int = -1,
-                        log: bool = False,
+                        log: Union[bool, str] = False,
                         parse_mode: Union[str, object] = object,
                         disable_web_page_preview: Optional[bool] = None,
                         reply_markup: InlineKeyboardMarkup = None,
-                        **kwargs) -> Union[BaseMessage, bool]:
+                        **kwargs) -> Union['Message', bool]:
         """
-        This will first try to message.edit. If it raise MessageAuthorRequired error,
-        run message.reply.
+        This will first try to message.edit.
+        If it raise MessageAuthorRequired or MessageIdInvalid error, run message.reply.
 
         Example:
                 message.force_err(text='force_err', del_in=3)
@@ -469,8 +498,9 @@ class Message(BaseMessage):
                 New text of the message.
             del_in (``int``):
                 Time in Seconds for delete that message.
-            log (``bool``, *optional*):
+            log (``bool`` | ``str``, *optional*):
                 If ``True``, the message will be forwarded to the log channel.
+                If ``str``, the logger name will be updated.
             parse_mode (``str``, *optional*):
                 By default, texts are parsed using both Markdown and HTML styles.
                 You can combine both syntaxes together.
@@ -500,10 +530,11 @@ class Message(BaseMessage):
     async def try_to_edit(self,
                           text: str,
                           del_in: int = -1,
-                          log: bool = False,
+                          log: Union[bool, str] = False,
+                          sudo: bool = True,
                           parse_mode: Union[str, object] = object,
                           disable_web_page_preview: Optional[bool] = None,
-                          reply_markup: InlineKeyboardMarkup = None) -> Union[BaseMessage, bool]:
+                          reply_markup: InlineKeyboardMarkup = None) -> Union['Message', bool]:
 
         """
         This will first try to message.edit. If it raise MessageNotModified error,
@@ -517,8 +548,11 @@ class Message(BaseMessage):
                 New text of the message.
             del_in (``int``):
                 Time in Seconds for delete that message.
-            log (``bool``, *optional*):
+            log (``bool`` | ``str``, *optional*):
                 If ``True``, the message will be forwarded to the log channel.
+                If ``str``, the logger name will be updated.
+            sudo (``bool``, *optional*):
+                If ``True``, sudo users supported.
             parse_mode (``str``, *optional*):
                 By default, texts are parsed using both Markdown and HTML styles.
                 You can combine both syntaxes together.
@@ -539,6 +573,7 @@ class Message(BaseMessage):
             return await self.edit(text=text,
                                    del_in=del_in,
                                    log=log,
+                                   sudo=sudo,
                                    parse_mode=parse_mode,
                                    disable_web_page_preview=disable_web_page_preview,
                                    reply_markup=reply_markup)
@@ -549,11 +584,12 @@ class Message(BaseMessage):
     async def edit_or_send_as_file(self,
                                    text: str,
                                    del_in: int = -1,
-                                   log: bool = False,
+                                   log: Union[bool, str] = False,
+                                   sudo: bool = True,
                                    parse_mode: Union[str, object] = object,
                                    disable_web_page_preview: Optional[bool] = None,
                                    reply_markup: InlineKeyboardMarkup = None,
-                                   **kwargs) -> Union[BaseMessage, bool]:
+                                   **kwargs) -> Union['Message', bool]:
 
         """
         This will first try to message.edit. If it raise MessageTooLong error,
@@ -567,8 +603,11 @@ class Message(BaseMessage):
                 New text of the message.
             del_in (``int``):
                 Time in Seconds for delete that message.
-            log (``bool``, *optional*):
+            log (``bool`` | ``str``, *optional*):
                 If ``True``, the message will be forwarded to the log channel.
+                If ``str``, the logger name will be updated.
+            sudo (``bool``, *optional*):
+                If ``True``, sudo users supported.
             parse_mode (``str``, *optional*):
                 By default, texts are parsed using both Markdown and HTML styles.
                 You can combine both syntaxes together.
@@ -590,6 +629,7 @@ class Message(BaseMessage):
             return await self.edit(text=text,
                                    del_in=del_in,
                                    log=log,
+                                   sudo=sudo,
                                    parse_mode=parse_mode,
                                    disable_web_page_preview=disable_web_page_preview,
                                    reply_markup=reply_markup)
@@ -600,14 +640,14 @@ class Message(BaseMessage):
     async def reply_or_send_as_file(self,
                                     text: str,
                                     del_in: int = -1,
-                                    log: bool = False,
+                                    log: Union[bool, str] = False,
                                     quote: Optional[bool] = None,
                                     parse_mode: Union[str, object] = object,
                                     disable_web_page_preview: Optional[bool] = None,
                                     disable_notification: Optional[bool] = None,
                                     reply_to_message_id: Optional[int] = None,
                                     reply_markup: InlineKeyboardMarkup = None,
-                                    **kwargs) -> Union[BaseMessage, bool]:
+                                    **kwargs) -> Union['Message', bool]:
 
         """
         This will first try to message.reply. If it raise MessageTooLong error,
@@ -621,8 +661,9 @@ class Message(BaseMessage):
                 Text of the message to be sent.
             del_in (``int``):
                 Time in Seconds for delete that message.
-            log (``bool``, *optional*):
+            log (``bool`` | ``str``, *optional*):
                 If ``True``, the message will be forwarded to the log channel.
+                If ``str``, the logger name will be updated.
             quote (``bool``, *optional*):
                 If ``True``, the message will be sent as a reply to this message.
                 If *reply_to_message_id* is passed, this parameter will be ignored.
@@ -667,15 +708,15 @@ class Message(BaseMessage):
     async def force_edit_or_send_as_file(self,
                                          text: str,
                                          del_in: int = -1,
-                                         log: bool = False,
+                                         log: Union[bool, str] = False,
                                          parse_mode: Union[str, object] = object,
                                          disable_web_page_preview: Optional[bool] = None,
                                          reply_markup: InlineKeyboardMarkup = None,
-                                         **kwargs) -> Union[BaseMessage, bool]:
+                                         **kwargs) -> Union['Message', bool]:
 
         """
-        This will first try to message.edit_or_send_as_file. If it raise MessageAuthorRequired error,
-        run message.reply_or_send_as_file.
+        This will first try to message.edit_or_send_as_file.
+        If it raise MessageAuthorRequired or MessageIdInvalid error, run message.reply_or_send_as_file.
 
         Example:
                 message.force_edit_or_send_as_file("some huge text")
@@ -685,8 +726,9 @@ class Message(BaseMessage):
                 New text of the message.
             del_in (``int``):
                 Time in Seconds for delete that message.
-            log (``bool``, *optional*):
+            log (``bool`` | ``str``, *optional*):
                 If ``True``, the message will be forwarded to the log channel.
+                If ``str``, the logger name will be updated.
             parse_mode (``str``, *optional*):
                 By default, texts are parsed using both Markdown and HTML styles.
                 You can combine both syntaxes together.
@@ -706,12 +748,13 @@ class Message(BaseMessage):
             return await self.edit_or_send_as_file(text=text,
                                                    del_in=del_in,
                                                    log=log,
+                                                   sudo=False,
                                                    parse_mode=parse_mode,
                                                    disable_web_page_preview=disable_web_page_preview,
                                                    reply_markup=reply_markup,
                                                    **kwargs)
 
-        except MessageAuthorRequired:
+        except (MessageAuthorRequired, MessageIdInvalid):
             return await self.reply_or_send_as_file(text=text,
                                                     del_in=del_in,
                                                     log=log,

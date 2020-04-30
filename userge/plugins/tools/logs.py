@@ -10,10 +10,12 @@
 from userge import userge, Message
 
 
-@userge.on_cmd("logs", about="__check userge logs__")
+@userge.on_cmd("logs", about={'header': "check userge logs"})
 async def check_logs(message: Message):
     """check logs"""
     await message.edit("`checking logs ...`")
-    with open("./logs/userge.log", "r") as l_f:
-        await message.edit_or_send_as_file(
-            l_f.read(), filename='userge.log', caption='userge.log')
+
+    with open("logs/userge.log", "r") as l_f:
+        await message.edit_or_send_as_file(f"**USERGE LOGS** :\n\n`{l_f.read()}`",
+                                           filename='userge.log',
+                                           caption='userge.log')

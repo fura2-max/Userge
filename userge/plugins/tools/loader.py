@@ -8,36 +8,43 @@
 
 
 import os
+
 from userge import userge, Message
 from userge.utils import get_import_path
 from userge.plugins import ROOT
 
+TMP_PATH = "userge/plugins/temp/"
 
-@userge.on_cmd('load', about="""\
-__Load Userge plugin__
 
-**Usage:**
-
-    `.load [reply to userge plugin]`""")
+@userge.on_cmd('load', about={
+    'header': "Load Userge plugin",
+    'usage': ".load [reply to userge plugin]"})
 async def load_cmd_handler(message: Message):
     await message.edit("Loading...")
     replied = message.reply_to_message
     if replied and replied.document:
         file_ = replied.document
 
-        if file_.file_name.endswith('.py') and file_.file_size < 1024 ** 1024:
-            path = await replied.download(file_name="userge/plugins/temp/")
-            plugin = get_import_path(ROOT, path)
+        if file_.file_name.endswith('.py') and file_.file_size < 2 ** 20:
+            if not os.path.isdir(TMP_PATH):
+                os.makedirs(TMP_PATH)
+
+            t_path = os.path.join(TMP_PATH, file_.file_name)
+            if os.path.isfile(t_path):
+                os.remove(t_path)
+
+            await replied.download(file_name=t_path)
+            plugin = get_import_path(ROOT, t_path)
 
             try:
                 userge.load_plugin(plugin)
 
-            except ImportError as i_e:
-                os.remove(path)
+            except (ImportError, SyntaxError) as i_e:
+                os.remove(t_path)
                 await message.err(i_e)
 
             else:
-                await message.edit(f"`Loaded {plugin}`", del_in=3, log=True)
+                await message.edit(f"`Loaded {plugin}`", del_in=3, log=__name__)
 
         else:
             await message.edit("`Plugin Not Found`")
@@ -46,9 +53,9 @@ async def load_cmd_handler(message: Message):
         await message.edit("`Reply to Plugin`")
 
 
-@userge.on_cmd('reload', about="__Reload all plugins__")
+@userge.on_cmd('reload', about={'header': "Reload all plugins"})
 async def reload_cmd_handler(message: Message):
     await message.edit("`Reloading All Plugins`")
 
     await message.edit(
-        f"`Reloaded {await userge.reload_plugins()} Plugins`", del_in=3, log=True)
+        f"`Reloaded {await userge.reload_plugins()} Plugins`", del_in=3, log=__name__)

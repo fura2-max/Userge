@@ -43,13 +43,23 @@
             "description": "Your Languge ( ex: if english => 'en' )",
             "required": false
         },
-        "SCREENSHOT_API": {
-            "description": "get API key from 'https://screenshotlayer.com'",
+        "CURRENCY_API": {
+            "description": "get API key from 'https://free.currencyconverterapi.com'",
             "required": false
 
         },
-        "CURRENCY_API": {
-            "description": "get API key from 'https://free.currencyconverterapi.com'",
+        "OCR_SPACE_API_KEY": {
+            "description": "get OCR API key from 'http://eepurl.com/bOLOcf'",
+            "required": false
+
+        },
+        "WEATHER_DEFCITY": {
+            "description": "add default city for weather",
+            "required": false
+
+        },
+        "OPEN_WEATHER_MAP": {
+            "description": "Weather API get it from 'https://openweathermap.org/",
             "required": false
 
         },
@@ -73,6 +83,10 @@
             "description": "set this to your USERGE fork on GitHub",
             "required": false
         },
+        "CMD_TRIGGER": {
+            "description": "set command prefix",
+            "required": false
+        },
         "SUDO_TRIGGER": {
             "description": "set command prefix for SUDO users",
             "required": false
@@ -83,6 +97,14 @@
     "buildpacks": [
         {
             "url": "https://github.com/jonathanong/heroku-buildpack-ffmpeg-latest.git"
+        }, {
+            "url": "https://github.com/HasibulKabir/heroku-buildpack-rarlab.git"
+        }, {
+            "url": "https://github.com/opendoor-labs/heroku-buildpack-p7zip"
+        }, {
+            "url": "https://github.com/heroku/heroku-buildpack-google-chrome"
+        }, {
+            "url": "https://github.com/heroku/heroku-buildpack-chromedriver"
         }, {
             "url": "https://github.com/heroku/heroku-buildpack-apt.git"
         }, {

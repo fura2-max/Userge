@@ -6,6 +6,7 @@
 #
 # All rights reserved.
 
+__all__ = ['Config']
 
 import os
 import sys
@@ -20,27 +21,25 @@ from pyrogram import Filters
 
 from userge import logging
 
-LOG = logging.getLogger(__name__)
+_LOG = logging.getLogger(__name__)
 
 if sys.version_info[0] < 3 or sys.version_info[1] < 6:
-    LOG.info("You MUST have a python version of at least 3.6 !")
+    _LOG.info("You MUST have a python version of at least 3.6 !")
     sys.exit()
 
-CONFIG_FILE = "config.env"
+_CONFIG_FILE = "config.env"
 
-if os.path.isfile(CONFIG_FILE):
-    LOG.info("%s Found and loading ...", CONFIG_FILE)
-    load_dotenv(CONFIG_FILE)
+if os.path.isfile(_CONFIG_FILE):
+    _LOG.info("%s Found and loading ...", _CONFIG_FILE)
+    load_dotenv(_CONFIG_FILE)
 
 if os.environ.get("_____REMOVE_____THIS_____LINE_____", None):
-    LOG.error("Please remove the line mentioned in the first hashtag from the config.env file")
+    _LOG.error("Please remove the line mentioned in the first hashtag from the config.env file")
     sys.exit()
 
 
 class Config:
-    """
-    Configs to setup Userge.
-    """
+    """Configs to setup Userge"""
 
     API_ID = int(os.environ.get("API_ID", 12345))
 
@@ -54,11 +53,19 @@ class Config:
 
     LANG = os.environ.get("PREFERRED_LANGUAGE", "en")
 
-    DOWN_PATH = os.environ.get("DOWN_PATH", "downloads/")
+    DOWN_PATH = os.environ.get("DOWN_PATH", "downloads").rstrip('/') + '/'
 
     SCREENSHOT_API = os.environ.get("SCREENSHOT_API", None)
 
     CURRENCY_API = os.environ.get("CURRENCY_API", None)
+
+    OCR_SPACE_API_KEY = os.environ.get("OCR_SPACE_API_KEY", None)
+
+    OPEN_WEATHER_MAP = os.environ.get("OPEN_WEATHER_MAP", None)
+
+    WEATHER_DEFCITY = os.environ.get("WEATHER_DEFCITY", None)
+
+    TZ_NUMBER = os.environ.get("TZ_NUMBER", 1)
 
     G_DRIVE_CLIENT_ID = os.environ.get("G_DRIVE_CLIENT_ID", None)
 
@@ -67,6 +74,10 @@ class Config:
     G_DRIVE_PARENT_ID = os.environ.get("G_DRIVE_PARENT_ID", None)
 
     G_DRIVE_IS_TD = bool(os.environ.get("G_DRIVE_IS_TD", False))
+
+    GOOGLE_CHROME_DRIVER = os.environ.get("GOOGLE_CHROME_DRIVER", None)
+
+    GOOGLE_CHROME_BIN = os.environ.get("GOOGLE_CHROME_BIN", None)
 
     LOG_CHANNEL_ID = int(os.environ.get("LOG_CHANNEL_ID", 0))
 
@@ -80,13 +91,15 @@ class Config:
 
     HEROKU_GIT_URL = None
 
-    PUSHING = False
-
     MSG_DELETE_TIMEOUT = 120
 
     WELCOME_DELETE_TIMEOUT = 120
 
+    AUTOPIC_TIMEOUT = 300
+
     ALLOWED_CHATS = Filters.chat([])
+
+    CMD_TRIGGER = os.environ.get("CMD_TRIGGER", '.')
 
     SUDO_TRIGGER = os.environ.get("SUDO_TRIGGER", '!')
 
@@ -95,52 +108,45 @@ class Config:
     ALLOWED_COMMANDS: Set[str] = set()
 
 
-if Config.SUDO_TRIGGER == '.':
-    LOG.info("Invalid SUDO_TRIGGER!, You can't use `.` as SUDO_TRIGGER")
+if Config.SUDO_TRIGGER == Config.CMD_TRIGGER:
+    _LOG.info("Invalid SUDO_TRIGGER!, You can't use `%s` as SUDO_TRIGGER", Config.CMD_TRIGGER)
     sys.exit()
 
 if not os.path.isdir(Config.DOWN_PATH):
-    LOG.info("Creating Download Path...")
+    _LOG.info("Creating Download Path...")
     os.mkdir(Config.DOWN_PATH)
 
 if Config.HEROKU_API_KEY:
-    LOG.info("Checking Heroku App...")
-
+    _LOG.info("Checking Heroku App...")
     for heroku_app in heroku3.from_key(Config.HEROKU_API_KEY).apps():
         if heroku_app and Config.HEROKU_APP_NAME and \
             heroku_app.name == Config.HEROKU_APP_NAME:
-
-            LOG.info("Heroku App : %s Found...", heroku_app.name)
-
+            _LOG.info("Heroku App : %s Found...", heroku_app.name)
             Config.HEROKU_APP = heroku_app
             Config.HEROKU_GIT_URL = heroku_app.git_url.replace(
                 "https://", "https://api:" + Config.HEROKU_API_KEY + "@")
-
             if not os.path.isdir(os.path.join(os.getcwd(), '.git')):
                 tmp_heroku_git_path = os.path.join(os.getcwd(), 'tmp_heroku_git')
-
-                LOG.info("Cloning Heroku GIT...")
-
+                _LOG.info("Cloning Heroku GIT...")
                 Repo.clone_from(Config.HEROKU_GIT_URL, tmp_heroku_git_path)
                 shutil.move(os.path.join(tmp_heroku_git_path, '.git'), os.getcwd())
                 shutil.rmtree(tmp_heroku_git_path)
-
             break
 
 if not os.path.exists('bin'):
-    LOG.info("Creating BIN...")
+    _LOG.info("Creating BIN...")
     os.mkdir('bin')
 
-BINS = {
+_BINS = {
     "https://raw.githubusercontent.com/yshalsager/megadown/master/megadown":
     "bin/megadown",
     "https://raw.githubusercontent.com/yshalsager/cmrudl.py/master/cmrudl.py":
     "bin/cmrudl"}
 
-LOG.info("Downloading BINs...")
-
-for binary, path in BINS.items():
-    LOG.debug("Downloading %s...", binary)
-    downloader = SmartDL(binary, path, progress_bar=False)
-    downloader.start()
-    os.chmod(path, 0o755)
+_LOG.info("Checking BINs...")
+for binary, path in _BINS.items():
+    if not os.path.exists(path):
+        _LOG.debug("Downloading %s...", binary)
+        downloader = SmartDL(binary, path, progress_bar=False)
+        downloader.start()
+        os.chmod(path, 0o755)

@@ -17,7 +17,7 @@ CHANNEL = userge.getCLogger(__name__)  # channel logger object
 
 @userge.on_cmd("dic", about={
     'header': "English Dictionary-telegram",
-    'usage': ".dic [word]",
+    'usage': "{tr}dic [word]",
     'examples': 'word : Search for any word'})
 async def dictionary(message: Message):
     """this is a dictionary"""
@@ -102,6 +102,7 @@ async def dictionary(message: Message):
         last_output = out_print(r_dec)
         if last_output:
             await message.edit("`📌Search reasult for   `"+f"👉 {v_word}\n\n"+last_output)
+            await CHANNEL.log(f"Get dictionary results for 👉 {v_word}")
         else:
             await message.edit('`No result found from the database.😔`', del_in=5)
-    await CHANNEL.log("request updated!")  # log to channel
+            await CHANNEL.log(f"Get dictionary results empty")

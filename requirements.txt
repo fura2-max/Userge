@@ -1,4 +1,6 @@
 git+https://github.com/pyrogram/pyrogram.git@asyncio-dev
+aiofiles
+aiohttp
 bs4
 cowpy
 dnspython
@@ -14,14 +16,18 @@ nest_asyncio
 oauth2client
 Pillow
 psutil
+pybase64
 pymongo
 pySmartDL
 python-dotenv
+pytz
+rarfile
 requests
 search-engine-parser
 selenium
 setuptools>=40.3.0
 speedtest-cli
+telegraph
 tgcrypto
 urbandict==0.5
 wget

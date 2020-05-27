@@ -93,8 +93,8 @@ def mp3Dl(url, prog, starttime):
 
 @userge.on_cmd("ytinfo", about={'header': "Get info from ytdl",
                                 'description': 'Get information of the link without downloading',
-                                'examples': '`.ytinfo link`',
-                                'others': 'To get info about direct links, use `.head link`'})
+                                'examples': '{tr}ytinfo link',
+                                'others': 'To get info about direct links, use `{tr}head link`'})
 async def ytinfo(message: Message):
     await message.edit("Hold on \u23f3 ..")
     _exracted = yt_getInfo(message.input_or_reply_str)
@@ -121,11 +121,11 @@ __{uploader}__
                               'options': {'-a': 'select the audio u-id',
                                           '-v': 'select the video u-id',
                                           '-m': 'extract the mp3 in 320kbps',
-                                          '-t': 'uploadsm to telegram'},
-                              'examples': ['.ytdl `link`',
-                                           '`.ytdl -a12 -v120 link`',
-                                           '`.ytdl -m -t link` will upload the mp3',
-                                           '`.ytdl -m -t -d link` will upload the mp3 as a document']}, del_pre=True)
+                                          '-t': 'upload to telegram'},
+                              'examples': ['{tr}ytdl link',
+                                           '{tr}ytdl -a12 -v120 link',
+                                           '{tr}ytdl -m -t link will upload the mp3',
+                                           '{tr}ytdl -m -t -d link will upload the mp3 as a document']}, del_pre=True)
 async def ytDown(message: Message):
     def __progress(data: dict):
         if ((time() - startTime) % 4) > 3.9:
@@ -157,8 +157,11 @@ async def ytDown(message: Message):
             # 1st format must contain the video
             desiredFormat = '+'.join([desiredFormat2, desiredFormat1])
             retcode = tubeDl([message.filtered_input_str], __progress, startTime, desiredFormat)
-        elif len(message.flags) == 1:
-            desiredFormat = desiredFormat2 or desiredFormat1
+        elif 'a' in message.flags:
+            desiredFormat = desiredFormat1
+            retcode = tubeDl([message.filtered_input_str], __progress, startTime, desiredFormat)
+        elif 'v' in message.flags:
+            desiredFormat = desiredFormat2+'+bestaudio'
             retcode = tubeDl([message.filtered_input_str], __progress, startTime, desiredFormat)
         else:
             retcode = tubeDl([message.filtered_input_str], __progress, startTime, None)
@@ -171,3 +174,23 @@ async def ytDown(message: Message):
             await upload(Path(_fpath), message.chat.id, message.flags)
     else:
         await message.edit(str(retcode))
+
+
+@userge.on_cmd("ytdes", about={'header': "Get the video description",
+                               'description': 'Get information of the link without downloading',
+                               'examples': '{tr}ytdes link'})
+async def ytdes(message: Message):
+    await message.edit("Hold on \u23f3 ..")
+    try:
+        x = ytdl.YoutubeDL({'no-playlist': True, 'logger': LOGGER}).extract_info(message.input_or_reply_str,
+                                                                                 download=False)
+    except ytdl.utils.YoutubeDLError as e:
+        await message.err(str(e))
+    else:
+        description = x.get('description', '')
+        if description:
+            out = '--Description--\n\n\t'
+            out += description
+        else:
+            out = 'No descriptions found :('
+        await message.edit_or_send_as_file(out)
